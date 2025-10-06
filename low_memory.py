@@ -1,11 +1,13 @@
+import base64
 import os
 import re
+from functools import wraps
 from pathlib import Path
 from typing import List, Dict
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import chromadb
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import torch
 
 
@@ -307,6 +309,26 @@ Question: {query}</s>
             'mode': self.mode
         }
 
+def require_basic_auth(username, password):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            auth = request.headers.get("Authorization")
+            if not auth or not auth.startswith("Basic "):
+                return Response("Authentication required", 401,
+                                {"WWW-Authenticate": "Basic realm='Login Required'"})
+            try:
+                decoded = base64.b64decode(auth.split(" ")[1]).decode("utf-8")
+                user, pw = decoded.split(":", 1)
+            except Exception:
+                return Response("Invalid auth header", 401)
+
+            if user == username and pw == password:
+                return f(*args, **kwargs)
+            return Response("Unauthorized", 401,
+                            {"WWW-Authenticate": "Basic realm='Login Required'"})
+        return wrapper
+    return decorator
 
 # Flask API
 app = Flask(__name__)
@@ -314,6 +336,7 @@ chatbot = None
 
 
 @app.route('/ask', methods=['POST'])
+@require_basic_auth(os.getenv("BOT_USER"), os.getenv("BOT_PASS"))
 def ask():
     data = request.json
     question = data.get('question', '')
