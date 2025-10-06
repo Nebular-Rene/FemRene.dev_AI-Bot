@@ -174,10 +174,12 @@ class DocumentationChatbot:
         target_product = self._extract_product_name(query)
 
         if target_product:
+            if not isinstance(target_product, list):
+                target_product = [target_product]
             results = self.collection.query(
                 query_embeddings=query_embedding.tolist(),
                 n_results=top_k,
-                where={"source": {"$contains": target_product}}
+                where={"source": {"$in": target_product}}
             )
         else:
             results = self.collection.query(
