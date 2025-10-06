@@ -174,19 +174,38 @@ class DocumentationChatbot:
         target_product = self._extract_product_name(query)
 
         if target_product:
+            # Ensure target_product is a list for $in
             if not isinstance(target_product, list):
                 target_product = [target_product]
+
             results = self.collection.query(
                 query_embeddings=query_embedding.tolist(),
-                n_results=top_k,
-                where={"source": {"$in": target_product}}
+                n_results=top_k
             )
+
+            # Optional substring filtering (manual)
+            if target_product:
+                filtered = []
+                filtered_meta = []
+                for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
+                    if any(tp.lower() in meta.get("source", "").lower() for tp in target_product):
+                        filtered.append(doc)
+                        filtered_meta.append(meta)
+
+                results["documents"][0] = filtered
+                results["metadatas"][0] = filtered_meta
         else:
             results = self.collection.query(
                 query_embeddings=query_embedding.tolist(),
                 n_results=top_k
             )
 
+        print("Query:", query, flush=True)
+        print("Target product:", target_product, flush=True)
+        print("Result keys:", results.keys(), flush=True)
+        print("Documents found:", len(results['documents'][0]), flush=True)
+        for i, doc in enumerate(results['documents'][0]):
+            print(f"{i + 1}. {results['metadatas'][0][i]['source'][:60]}", flush=True)
         return [
             {
                 'text': results['documents'][0][i],
